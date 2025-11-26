@@ -4,193 +4,145 @@
 #include <time.h>
 #include <ctype.h>
 
-/* 头文件引用 */
 #include "main.h"
 #include "Function.h"
 
-/* 
-登录模块：		y打印提示信息	
-				y读取————》封装
-				检测————————检测类型（分流），检测存在
-				验证码平台————》封装		（检测输入格式，检测是否正确）
-				次数限制
-				//防御模块————》封装
-				匹配分流
-				遍历数据库开始登录
- */
- 
- //注册
- int regist (database){
- 
- }
- 
- //登录
- int login(database student,database teacher){
-	
- }
- 
- 
- 
- //类型检测
- int apart ( void ){
-	int inputs;
-	while (1){
-		printf ("你的登入类型为（1学生，2老师） | >  ");
-		supScanf(1,&inputs);
-		if (inputs == 1){
-			return studentdef;	//学生
-		} else if (inputs == 0){
-			return teacherdef;	//老师
-		} else {
-			printf ("Invaid input!\n");
-		}
-	}
- }
- 
- //第一层验证码
- int verification1 (void){		//本体
-	//验证码数组定义
-	const length = 10;
-	char varcode[length];		//验证码
-	char answer[length];
-	int block = 0;
-	//打印验证码
-	while (1){
-			if (block == 3){
-				return -1;
-			}
-			printf ("\n=============================================\n");
-			init_verification1 (char varcode[length],char answer[length],length);
-			for (i = 0;i < length;i++ ){
-			printf ("%s",varcode[i]);
-			}
-			printf ("\n=============================================\n");
-			//用户输入
-			printf ("请输入验证码中非字符部分,输入 re 可以重新生成 ");
-			printf ("＞　");
-			char input[64];
-			supgets(input,sizeof(input),2);
-			if (strcmp (input,'re')){
-				continue;
-			} else {
-				if (strcmp (input,answer)){
-					printf ("第一层验证码验证成功！\n");
-					break;
-				} else {
-					printf ("第一层验证码验证失败！请重试！\n");
-					block++;
-					continue;
-				}
-			}
-	}
-	return 0;
- }
- 
-void init_verification1 (char varcode[],char answer[],const length){	//生成
-	char useless[] = {'!','@','#','$','%','&','*'};		//无用字符
-	srand (time());
-	//const length = 10;
-	int blueprint[length];		//记录每个位置的内容类型
-	//char varcode[length];		//验证码
-	//char answer[length];
-	for (int i = 0; i < length ; i++){
-		blueprint[i] = rand()%3;
-	}
-	int j = 0;
-	for (i = 0;i < length;i++){
-		if (blueprint[i] == 0){		//useless
-			varcode[i] = useless[rand()%7];
-		} else if (blueprint[i] == 1){		//digit
-			varcode[i] = 48 + rand()%10;
-			answer[j] = varcode[i];
-			j++;
-		} else if ( blueprint[i] == 2 ){
-			varcode[i] = 97 + rand()%27;
-			answer[j] = varcode[i];
-			j++;
-		}
-	}
+extern int attempts;
+extern const int max_attempts;
+
+// 声明在 Function.c 中定义的全局变量
+extern VarArray tcr_table, stu_table;
+extern database teacher_base, student_base;
+
+// 密码验证函数
+int verify_password(void* user, int user_type) {
+    int attempts = 0;
+    const int max_attempts = 3;
+    
+    while(attempts < max_attempts) {
+        printf("请输入密码: ");
+        char password[MAX_PASSWORD_LEN];
+        supGets(password, MAX_PASSWORD_LEN, 3);
+        
+        int password_correct = 0;
+        if(user_type == teacherdef) {
+            teacher* tcr = (teacher*)user;
+            password_correct = (strcmp(password, tcr->password) == 0);
+        } else {
+            student* stu = (student*)user;
+            password_correct = (strcmp(password, stu->password) == 0);
+        }
+        
+        if(password_correct) {
+            if(user_type == teacherdef) {
+                teacher* tcr = (teacher*)user;
+                printf("\033[32m登录成功！欢迎教师 %s (工号: %lld)\033[0m\n", tcr->name, tcr->job_number);
+                teacher_interface(tcr, &student_base, &teacher_base);  // 修复这里
+            } else {
+                student* stu = (student*)user;
+                printf("\033[32m登录成功！欢迎学生 %s (学号: %lld)\033[0m\n", stu->name, stu->stu_number);
+                student_interface(stu, &student_base, &teacher_base);  // 修复这里
+            }
+            return 1;
+        } else {
+            attempts++;
+            if(attempts < max_attempts) {
+                printf("\033[31m密码错误！还有 %d 次机会\033[0m\n", max_attempts - attempts);
+            }
+        }
+    }
+    
+    printf("\033[31m密码错误次数过多，登录失败！\033[0m\n");
+    return 0;
 }
 
+// 登录函数
+int login(int user_type, database* user_base, VarArray* table) {
+    if(verification1() != 0 || verification2() != 0) {
+        printf("\033[31m验证码验证失败，登录失败！\033[0m\n");
+        return 0;
+    }
+    
+    long long user_id;
+    printf("请输入您的工号或学号: ");
+    if(scanf("%lld", &user_id) != 1) {
+        printf("\033[31m输入错误！\033[0m\n");
+        clear_input_buffer();
+        return 0;
+    }
+    clear_input_buffer();
+    
+    int index = search(table, user_id);
+    if(index == -1) {
+        printf("\033[31m用户不存在！请先注册！\033[0m\n");
+        return -1;
+    }
+    
+    FILE* file = fopen(user_base->name, "rb");
+    if(file == NULL) {
+        printf("\033[31m无法打开用户数据库！\033[0m\n");
+        return 0;
+    }
+    
+    int found = 0;
+    int login_result = 0;
+    
+    if(user_type == teacherdef) {
+        teacher tcr;
+        while(fread(&tcr, sizeof(teacher), 1, file) == 1) {
+            if(tcr.job_number == user_id) {
+                found = 1;
+                login_result = verify_password(&tcr, user_type);
+                break;
+            }
+        }
+    } else {
+        student stu;
+        while(fread(&stu, sizeof(student), 1, file) == 1) {
+            if(stu.stu_number == user_id) {
+                found = 1;
+                login_result = verify_password(&stu, user_type);
+                break;
+            }
+        }
+    }
+    
+    fclose(file);
+    
+    if(!found) {
+        printf("\033[31m读取用户数据失败！\033[0m\n");
+        return 0;
+    }
+    
+    return login_result;
+}
 
-//第二层验证码
-int verification2 (void){		//本体
-//验证码数组定义
-	const length = 13;
-	char varcode[length];		//验证码
-	int block = 0;
-	//打印验证码
-	while (1){
-			if (block == 3){
-				return -1;
-			}
-			printf ("\n=============================================\n");
-			int answer = init_verification2 (char varcode[length] , length);
-			for (i = 0;i < length;i++ ){
-			printf ("%s",varcode[i]);
-			}
-			printf ("\n=============================================\n");
-			//用户输入
-			printf ("请输入验证码的结果,输入 10086 可以重新生成 ");
-			printf ("＞　");
-			int input;
-			supScanf(1,&input)
-			if (input == 10086){
-				continue;
-			} else {
-				if (input == answer){
-					printf ("第二层验证码验证成功！\n");
-					break;
-				} else {
-					printf ("第二层验证码验证失败！请重试！\n");
-					continue;
-				}
-			}
-	}
-	return 0;
- }
-
-int init_verification2 (char varcode[length],length){ 		//生成验证码：1 + 1 + 1 = 2
-	srand (time());
-	char symbol[] = {'+','-','*'};
-	varcode[1] = ' '，varcode[3] = ' '，varcode[5] = ' '，varcode[7] = ' '，varcode[9] = ' '，varcode[11] = ' ';
-	varcode[10] = '=';
-	//符号位
-	int time[2];
-	int i = rand()%3;
-	time[0] = i;		//第二位符号
-	if ( i == 2){
-		varcode[6] = '*';
-	} else {
-		varcode[6] = symbol[i];
-	}
-	int i = rand()%3;
-	time[1] = i;			//第一位符号
-	varcode[2] = symbol[i];
-	//数字
-	int a = rand()%10;
-	int b = rand()%10;
-	int c = rand()%10;
-	varcode[0] = 48 + a;
-	varcode[4] = 48 + b;
-	varcode[8] = 48 + c;
-	if (time[0] == 3){
-		if (time[1] = 0){
-			return (b * c + a);
-		} else if (time[1] = 1){
-			return (b * c - a);
-		}if (time[1] = 0){
-			return (b * c * a);
-		}
-	} else if (time[1] == 3){
-		if (time[0] = 0){
-			return (a * b + c);
-		} else if (time[0] = 0){
-			return (a * b - c);
-		} else if (time[0] = 0){
-			return (a * b * c);
-		}
-	} else {
-		return (a + b + c)
-	}
+// 重新设计的登录函数
+int redesigned_login(database* teacher_db, database* student_db, 
+                    VarArray* teacher_table, VarArray* student_table) {
+    if(verification1() != 0 || verification2() != 0) {
+        printf("\033[31m验证码验证失败，登录失败！\033[0m\n");
+        return 0;
+    }
+    
+    long long user_id;
+    printf("请输入您的工号或学号: ");
+    if(scanf("%lld", &user_id) != 1) {
+        printf("\033[31m输入错误！\033[0m\n");
+        clear_input_buffer();
+        return 0;
+    }
+    clear_input_buffer();
+    
+    int teacher_index = search(teacher_table, user_id);
+    int student_index = search(student_table, user_id);
+    
+    if(teacher_index != -1) {
+        return login(teacherdef, teacher_db, teacher_table);
+    } else if(student_index != -1) {
+        return login(studentdef, student_db, student_table);
+    } else {
+        printf("\033[31m用户不存在！请先注册！\033[0m\n");
+        return -1;
+    }
 }

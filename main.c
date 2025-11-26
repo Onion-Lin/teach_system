@@ -3,104 +3,82 @@
 #include <string.h>
 #include <time.h>
 
-/* 头文件引用 */
 #include "main.h"
 #include "Function.h"
 
-/*教务系统：
-	登录模块：	y打印提示信息	
-				y读取————》封装
-				检测————————检测类型（分流），检测存在
-				验证码平台————》封装		（检测输入格式，检测是否正确）
-				次数限制
-				//防御模块————》封装
-				匹配分流
-				遍历数据库开始登录
-	
-	注册模块：	创建数据库文件：学生，老师
-				打印提示信息
-				读取————》封装
-				检测：	检测是否注册过，
-						分流
-				写入
-				校验
-	
-	检测模块：	指针传参
-				检测输入格式
-				检测输入内容是否正确
-				检测重复
-				检测用户分流————》返回值0老师，1学生，-1失败
-	
-	验证码模块：	创建字符数组存放数字，字母与字符
-				生成随机数抽取
-				确保不都是非打印字符
-				调用检测检测是否正确
-				
-			
-*/
+/* 全局变量定义 */
+int attempts = 0;
+const int max_attempts = 3;
 
-/* 全局变量定义，声明 */
-
+// 全局数据库变量
+VarArray tcr_table, stu_table;
+database teacher_base, student_base;
 
 /* 主函数部分 */
-int main (){
-		//读取字符串定义
-		char ipt[64];
-		char name[64];
-		int TorS;
-		//循环主体
-		while (1){
-			//打印提示信息
-			printhelp();
-			//读取输入，判断执行那个功能
-			fgets (ipt,64,stdin);
-			if (strcmp (ipt,"login") == 0){
-				//检测分流，返回值存进变量
-				TorS = apart();			//（1学生，2老师）
-			
-				//验证码平台
-				if ( verification1() == 0 && verification2() == 0){	//验证成功
-					//防御模块 （待定）
-				
-					//读取分流结果，输出提示信息，读取输入功能，失败自动循环
-					//调用功能函数
-					if (TorS == teacherdef){
-						// 这里是老师的功能
-
-						
-						
-					}
-					else if(TorS == studentdef){
-						//这里是学生的功能
-						
-						
-						
-					}
-				}
-			}
-			//注册
-			else if (strcmp (ipt,"regist") == 0){
-				
-			
-			}
-			//安全退出————》保存，检验，（写入）
-			else if (strcmp (ipt,"quit")){
-				jianyanjianyanjianyan()
-				if(return == ok){
-				printf ("Thanks for using!See you!\n");
-				break;
-			}else{
-				cuowuchuli()
-			}
-				//break;
-			}
-			//错误处理
-			else{
-				printf ("Invalid input!Please try again!\n");
-			}
-		}
-		
-	//free内存，防止泄露
-	
-	return 0;
+int main() {
+    char ipt[64];
+    
+    // 系统初始化
+    if (init_system() != 0) {
+        printf("\033[31m系统初始化失败！程序退出。\033[0m\n");
+        return 1;
+    }
+    
+    printf("\033[32m系统初始化成功！\033[0m\n");
+    
+    // 主循环
+    while (1) {
+        print_main_menu();
+        supGets(ipt, 64, 3);
+        
+        if (strcmp(ipt, "1") == 0 || strcmp(ipt, "login") == 0) {
+            // 登录
+            int login_result = redesigned_login(&teacher_base, &student_base, &tcr_table, &stu_table);
+            if(login_result == -1) {
+                printf("\033[31m用户不存在！请先注册！\033[0m\n");
+            }
+        }
+        else if (strcmp(ipt, "2") == 0 || strcmp(ipt, "regist") == 0) {
+            // 注册
+            int reg_type = select_user_type();
+            
+            if (verification1() == 0 && verification2() == 0) {
+                if (reg_type == teacherdef) {
+                    redesigned_regist(reg_type, &teacher_base, &tcr_table);
+                } else if (reg_type == studentdef) {
+                    redesigned_regist(reg_type, &student_base, &stu_table);
+                }
+            } else {
+                printf("\033[31m验证码验证失败，注册失败！\033[0m\n");
+                if(attempts >= max_attempts) {
+                    printf("\033[31m尝试次数过多，程序退出！\033[0m\n");
+                    break;
+                }
+            }
+        }
+        else if (strcmp(ipt, "3") == 0 || strcmp(ipt, "stats") == 0) {
+            // 系统统计
+            system_statistics();
+        }
+        else if (strcmp(ipt, "4") == 0 || strcmp(ipt, "backup") == 0) {
+            // 系统备份
+            backup_system();
+        }
+        else if (strcmp(ipt, "5") == 0 || strcmp(ipt, "help") == 0) {
+            // 帮助信息
+            print_main_menu();
+        }
+        else if (strcmp(ipt, "0") == 0 || strcmp(ipt, "quit") == 0) {
+            // 退出系统
+            printf("\033[35m感谢使用教务管理系统！再见！\033[0m\n");
+            break;
+        }
+        else {
+            printf("\033[31m无效输入！请重试。\033[0m\n");
+        }
+    }
+    
+    // 系统清理
+    cleanup_system();
+    return 0;
 }
